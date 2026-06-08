@@ -102,7 +102,7 @@ CREATE TYPE task_visibility AS ENUM ('public', 'invite_only');
 
 ```sql
 CREATE TABLE users (
-  id                BIGSERIAL PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid()
   phone             VARCHAR(20) UNIQUE,                    -- 手机号（与微信二选一）
   wechat_openid     VARCHAR(128) UNIQUE,                   -- 微信 OpenID
   role              user_role NOT NULL,                    -- 身份：client / freelancer

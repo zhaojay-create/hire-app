@@ -14,7 +14,7 @@ apps/api/migrations
 
 创建：
 ```bash
-migrate create -ext sql -dir migrations create_users
+migrate create -ext sql -dir apps/api/migrations create_users
 ```
 
 以后所有表都这样建，不要手动建表；
