@@ -18,6 +18,11 @@ migrate create -ext sql -dir apps/api/migrations create_users
 ```
 
 以后所有表都这样建，不要手动建表；
+
 ```bash
 migrate  -path apps/api/migrations -database "$DATABASE_URL" up
+```
+
+```bash
+migrate  -path apps/api/migrations -database "$DATABASE_URL" down
 ```

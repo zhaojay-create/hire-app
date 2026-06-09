@@ -28,6 +28,35 @@
   - [文件上传](#文件上传-apiv1uploads)
 
 ---
+上线版只保留：
+  - 用户
+  - 技能
+  - 任务
+  - 申请
+  - 聊天
+  - 连接点
+
+第一批
+001_users
+002_user_profiles
+003_skills
+004_user_skills
+005_tasks
+006_task_skills
+007_applications
+008_messages
+
+第二批
+009_connection_point_accounts
+010_connection_point_logs
+
+第三批
+011_reviews
+
+第四批
+012_milestones
+013_wallet_accounts
+014_wallet_transactions
 
 ## 一、数据库设计
 
@@ -96,170 +125,6 @@ CREATE TYPE task_visibility AS ENUM ('public', 'invite_only');
 
 ---
 
-### 表结构
-
-#### `users` — 用户账号
-
-```sql
-CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-  phone             VARCHAR(20) UNIQUE,                    -- 手机号（与微信二选一）
-  wechat_openid     VARCHAR(128) UNIQUE,                   -- 微信 OpenID
-  role              user_role NOT NULL,                    -- 身份：client / freelancer
-  verification      verification_status NOT NULL DEFAULT 'unverified',
-  is_active         BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-
-| 字段              | 类型                  | 说明                        |
-| --------------- | ------------------- | ------------------------- |
-| `id`            | BIGSERIAL           | 主键                        |
-| `phone`         | VARCHAR(20)         | 手机号，与 `wechat_openid` 二选一 |
-| `wechat_openid` | VARCHAR(128)        | 微信 OpenID                 |
-| `role`          | user_role           | 首次登录后必须选择                 |
-| `verification`  | verification_status | 实名认证状态                    |
-| `is_active`     | BOOLEAN             | 账号是否启用                    |
-
-
----
-
-#### `user_profiles` — 用户扩展资料
-
-```sql
-CREATE TABLE user_profiles (
-  user_id           BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  display_name      VARCHAR(64) NOT NULL DEFAULT '',
-  avatar_url        TEXT,
-  bio               TEXT,                                  -- 个人简介
-  portfolio_urls    TEXT[],                                -- 作品集链接数组
-  avg_rating        NUMERIC(3,2) NOT NULL DEFAULT 0.00,   -- 平均评分（冗余，异步更新）
-  review_count      INT NOT NULL DEFAULT 0,
-  completed_tasks   INT NOT NULL DEFAULT 0,
-  hourly_rate       NUMERIC(10,2),                        -- 服务者期望时薪（可选）
-  location          VARCHAR(128),
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
----
-
-#### `skills` — 技能标签字典
-
-```sql
-CREATE TABLE skills (
-  id          SERIAL PRIMARY KEY,
-  name        VARCHAR(64) NOT NULL UNIQUE,   -- 如：UI设计、React、文案策划
-  category    VARCHAR(64),                   -- 一级分类，如：设计、开发、写作
-  is_active   BOOLEAN NOT NULL DEFAULT TRUE,
-  sort_order  INT NOT NULL DEFAULT 0
-);
-```
-
----
-
-#### `user_skills` — 用户技能关联
-
-```sql
-CREATE TABLE user_skills (
-  user_id   BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  skill_id  INT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
-  PRIMARY KEY (user_id, skill_id)
-);
-```
-
----
-
-#### `connection_point_accounts` — 邀约点账户
-
-```sql
-CREATE TABLE connection_point_accounts (
-  user_id   BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  balance   INT NOT NULL DEFAULT 0,          -- 当前余额（单位：点）
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
----
-
-#### `connection_point_logs` — 邀约点流水
-
-```sql
-CREATE TABLE connection_point_logs (
-  id          BIGSERIAL PRIMARY KEY,
-  user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  type        cp_log_type NOT NULL,
-  amount      INT NOT NULL,                  -- 正数为获取，负数为消耗
-  balance_after INT NOT NULL,               -- 操作后余额
-  ref_id      BIGINT,                        -- 关联任务 ID 或申请 ID（可选）
-  note        TEXT,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
----
-
-#### `tasks` — 任务主表
-
-```sql
-CREATE TABLE tasks (
-  id                BIGSERIAL PRIMARY KEY,
-  client_id         BIGINT NOT NULL REFERENCES users(id),
-  freelancer_id     BIGINT REFERENCES users(id),           -- 接单后填入
-
-  title             VARCHAR(256) NOT NULL,
-  description       TEXT NOT NULL,                        -- 富文本 HTML
-  pricing_type      pricing_type NOT NULL,
-  status            task_status NOT NULL DEFAULT 'pending_accept',
-  visibility        task_visibility NOT NULL DEFAULT 'public',
-
-  -- 固定总价 / 按小时（通用字段）
-  budget_amount     NUMERIC(12,2),                        -- 总预算或最高预算封顶
-  duration_days     INT,                                  -- 预计完成天数（fixed 模式）
-
-  -- 按小时
-  hourly_rate       NUMERIC(10,2),                        -- 时薪
-  estimated_hours   INT,                                  -- 预计总小时数
-
-  -- 里程碑模式总金额（由里程碑表汇总，冗余存储）
-  milestone_total   NUMERIC(12,2),
-
-  contact_cost      INT NOT NULL DEFAULT 5,               -- 联系所需邀约点
-  deadline          DATE,                                 -- 任务截止日期
-  published_at      TIMESTAMPTZ,
-  completed_at      TIMESTAMPTZ,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-
-| 字段              | 类型              | 说明                   |
-| --------------- | --------------- | -------------------- |
-| `client_id`     | BIGINT          | 发布者（客户）              |
-| `freelancer_id` | BIGINT          | 接单者（任务接受后赋值）         |
-| `pricing_type`  | pricing_type    | 计费模式                 |
-| `contact_cost`  | INT             | 服务者联系需消耗的邀约点，0 表示公开  |
-| `visibility`    | task_visibility | public / invite_only |
-
-
----
-
-#### `task_skills` — 任务技能需求
-
-```sql
-CREATE TABLE task_skills (
-  task_id   BIGINT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-  skill_id  INT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
-  PRIMARY KEY (task_id, skill_id)
-);
-```
-
----
-
 #### `task_attachments` — 任务附件
 
 ```sql
@@ -298,26 +163,6 @@ CREATE TABLE milestones (
 );
 ```
 
----
-
-#### `applications` — 服务者申请/联系记录
-
-```sql
-CREATE TABLE applications (
-  id              BIGSERIAL PRIMARY KEY,
-  task_id         BIGINT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-  freelancer_id   BIGINT NOT NULL REFERENCES users(id),
-  status          application_status NOT NULL DEFAULT 'pending',
-  message         TEXT,                      -- 首次联系时的自我介绍
-  cp_consumed     INT NOT NULL DEFAULT 0,    -- 消耗的邀约点数
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (task_id, freelancer_id)            -- 同一任务每个服务者只能申请一次
-);
-```
-
----
-
 #### `messages` — 站内消息
 
 ```sql
@@ -328,24 +173,6 @@ CREATE TABLE messages (
   content       TEXT NOT NULL,
   is_read       BOOLEAN NOT NULL DEFAULT FALSE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
----
-
-#### `reviews` — 双向评价
-
-```sql
-CREATE TABLE reviews (
-  id            BIGSERIAL PRIMARY KEY,
-  task_id       BIGINT NOT NULL REFERENCES tasks(id),
-  reviewer_id   BIGINT NOT NULL REFERENCES users(id),   -- 评价方
-  reviewee_id   BIGINT NOT NULL REFERENCES users(id),   -- 被评价方
-  rating        SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
-  content       TEXT,
-  tags          TEXT[],                                  -- 快捷标签，如：["沟通顺畅","交付准时"]
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (task_id, reviewer_id)                          -- 每个任务每人只评价一次
 );
 ```
 

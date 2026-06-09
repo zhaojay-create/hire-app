@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS connection_point_accounts;

@@ -1,12 +1,26 @@
 services:
 
   postgres:
-    image: postgres:17
+    # image: postgres:17
+    image: abcfy2/zhparser:17
+
+    container_name: hire-postgres-1
+    # 除非你手动停止，否则永远重启（最常用、最推荐）
+    restart: unless-stopped
 
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: myproject
+      # 时区: 通用设置容器时区
+      TZ: Asia/Shanghai
+      # 时区: 告诉postgres用什么时区
+      PGTZ: Asia/Shanghai
+    command: >
+      postgres
+      -c timezone=Asia/Shanghai
+      -c log_timezone=Asia/Shanghai
+      -c client_encoding=utf8
 
     ports:
       - "5432:5432"
